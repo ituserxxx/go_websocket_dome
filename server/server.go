@@ -3,9 +3,9 @@ package server
 import (
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -22,19 +22,20 @@ func NewServer(ip string, port int) *Server {
 		Ip:        ip,
 		Port:      port,
 		OnlineMap: make(map[int]*User),
-		Message: make(chan string),
+		Message:   make(chan string),
 	}
 }
 
 func (s *Server) Start() {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Ip, s.Port))
 	if err != nil {
-		fmt.Printf("%#v 111111111", err.Error())
+		fmt.Printf("net.Listen err %#v ", err.Error())
 		return
 	}
-	go func() {// 监听广播消息
+	// 监听广播消息
+	go func() {
 		for {
-			msg := <- s.Message
+			msg := <-s.Message
 			s.MapLock.Lock()
 			for _, u := range s.OnlineMap {
 				u.Send(msg)
@@ -42,7 +43,8 @@ func (s *Server) Start() {
 			s.MapLock.Unlock()
 		}
 	}()
-	for {//监听接收客户端连接
+	fmt.Printf("\n%s\n", "--服务已启动--")
+	for { //监听接收客户端连接
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println(err.Error())
@@ -53,9 +55,9 @@ func (s *Server) Start() {
 }
 func (s *Server) handleConnect(conn net.Conn) {
 	s.Conn = conn
-	u := NewUser(rand.Intn(1000), conn, s)
+	u := NewUser(int(time.Now().Unix()), conn, s)
 	u.OnLine()
-	s.Send(fmt.Sprintf("----【系统消息：欢迎%d进入房间成功】----",u.Id))
+	s.Send(fmt.Sprintf("----【系统消息：欢迎%d进入房间成功】----", u.Id))
 	//监听用户输入
 	for {
 		buf := make([]byte, 1024)
@@ -72,13 +74,12 @@ func (s *Server) handleConnect(conn net.Conn) {
 
 			return
 		}
-		s.Message<- fmt.Sprintf("----用户  id=%d 用户说：【%s】",u.Id,string(buf[:n]))
+		s.Message <- fmt.Sprintf("----用户  id=%d 用户说：【%s】", u.Id, string(buf[:n]))
 	}
 }
 
-
 func (s *Server) Send(msg string) {
-	_, err := s.Conn.Write([]byte("\n"+msg+"\n"))
+	_, err := s.Conn.Write([]byte("\n" + msg + "\n"))
 	if err != nil {
 		fmt.Println(err.Error())
 	}
